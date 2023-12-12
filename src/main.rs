@@ -2,6 +2,11 @@ pub mod pcap;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use anyhow::{ Result};
+use crate::structs::raw::Raw;
+pub mod protocolparse;
+pub mod errors;
+
+pub mod structs;
 
 fn main() -> Result<()> {
    let device = "en0";
@@ -26,7 +31,16 @@ fn main() -> Result<()> {
                 };
 
                 if let Ok(Some(packet)) = packet {
-                    println!("packet: {:?}", packet);
+
+                    let packet = protocolparse::parse( &packet.data);
+                    match packet {
+                        Raw::Ether(_, _) => {
+                            println!("{:?}", packet);
+                        }
+                        Raw::Unknown(_) => {
+
+                        }
+                    }
                 }
 
                 // 提取数据完毕
