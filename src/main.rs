@@ -1,12 +1,17 @@
-pub mod pcap;
-use std::sync::{Arc, Mutex};
-use std::thread;
-use anyhow::{ Result};
-use crate::structs::raw::Raw;
 pub mod protocolparse;
 pub mod errors;
 
 pub mod structs;
+
+pub mod pcap;
+
+use std::sync::{Arc, Mutex};
+use std::thread;
+use anyhow::{ Result};
+use crate::structs::raw::Raw;
+use crate::structs::ether::Ether;
+use crate::structs::ipv4::IPv4;
+
 
 fn main() -> Result<()> {
    let device = "en0";
@@ -34,9 +39,22 @@ fn main() -> Result<()> {
 
                     let packet = protocolparse::parse( &packet.data);
                     match packet {
-                        Raw::Ether(_, _) => {
-                            println!("{:?}", packet);
-                        }
+                        // 这里面直接对 不同元素命名，后面可以直接使用
+                        Raw::Ether(_, ether) => {
+                            // println!("{:?}", ether);
+                            match ether {
+                                Ether::IPv4(header, tcp) => {
+                                    match tcp {
+                                        IPv4::TCP(tcpHeader, _) => {
+                                            println!("protocol: {:?},  {:?}:{:?} -> {:?}:{:?}", header.protocol, header.source_addr, tcpHeader.source_port, header.dest_addr, tcpHeader.dest_port);
+
+                                        },
+                                        IPv4::Unknown(_) => {}
+                                    }
+                                },
+                                Ether::Unknown(_) => {}
+                            }
+                        },
                         Raw::Unknown(_) => {
 
                         }
