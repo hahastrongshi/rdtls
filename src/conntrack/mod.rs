@@ -4,14 +4,16 @@
 //! directly managed by users. However, it publicly exposes some useful connection identifiers for
 //! convenience.
 
-// pub(crate) mod conn;
-// pub mod conn_id;
+pub(crate) mod conn;
+pub mod conn_id;
 pub(crate) mod pdu;
+
+use crate::Mbuf;
 // mod timerwheel;
 
 // use self::conn::conn_info::ConnState;
-// use self::conn::{Conn, L4Conn};
-// use self::conn_id::ConnId;
+use self::conn::{Conn, L4Conn};
+use self::conn_id::ConnId;
 use self::pdu::{L4Context, L4Pdu};
 // use self::timerwheel::TimerWheel;
 // use crate::config::ConnTrackConfig;
@@ -68,7 +70,7 @@ impl ConnTracker {
     /// Process a single incoming packet `mbuf` with layer-4 context `ctxt`.
     pub(crate) fn process(
         &mut self,
-        mbuf: &[u8],
+        mbuf: &Mbuf,
         ctxt: L4Context,
     ) {
         // let conn_id = ConnId::new(ctxt.src, ctxt.dst, ctxt.proto);
@@ -100,13 +102,13 @@ impl ConnTracker {
             RawEntryMut::Vacant(_) => {
                 if self.size() < self.config.max_connections {
                     let conn: Result<_, anyhow::Error>  = match ctxt.proto {
-                        // TCP_PROTOCOL => Conn::new_tcp(
-                        //     ctxt,
-                        //     self.config.tcp_establish_timeout,
-                        //     self.config.max_out_of_order,
-                        // ),
+                        1 => Conn::new_tcp(
+                            ctxt,
+                            self.config.tcp_establish_timeout,
+                            self.config.max_out_of_order,
+                        ),
                         // UDP_PROTOCOL => Conn::new_udp(ctxt, self.config.udp_inactivity_timeout),
-                        1 => Ok(1),
+                        // 1 => Ok(1),
                         _ => Err(anyhow!("Invalid L4 Protocol")),
                     };
                     if let Ok(mut conn) = conn {

@@ -2,7 +2,7 @@ use std::str::from_utf8;
 
 use pktparse::tcp::{self, TcpHeader};
 
-use crate::protocolparse::tls;
+use crate::protocols::tls;
 
 use crate::errors::ProtocolParseError;
 use crate::structs::tcp::TCP;

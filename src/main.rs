@@ -1,4 +1,4 @@
-pub mod protocolparse;
+pub mod protocols;
 pub mod errors;
 
 pub mod structs;
@@ -6,14 +6,20 @@ pub mod structs;
 pub mod pcap;
 pub mod conntrack;
 
-use std::sync::{Arc, Mutex};
+pub mod memory;
+
+pub mod utils;
+
+use std::sync::mpsc;
 use std::thread;
+use std::sync::{Arc, Mutex};
 use anyhow::{ Result};
 use crate::structs::raw::Raw;
 use crate::structs::ether::Ether;
 use crate::structs::ipv4::IPv4;
 
 use crate::conntrack::pdu::L4Context;
+use crate::memory::mbuf::Mbuf;
 
 
 
@@ -42,6 +48,20 @@ fn main() -> Result<()> {
     let mut connTracker = conntrack::ConnTracker::new(connTrackConfig);
 
 
+    // 为每个工作线程创建一个通道
+    let (tx, rx) = mpsc::channel::<Vec<u8>>();
+    // 创建工作线程
+    thread::spawn(move || {
+        // 在这里处理接收到的消息
+        for message in rx {
+            println!("Worker  received: {}",  message.len());
+            let mbuf = Mbuf::new(message);
+
+            if let Ok(ctx) = L4Context::new(&mbuf, 1) {
+                connTracker.process(&mbuf, ctx);
+            }
+        }
+    });
 
     let threads: usize = 1;
 
@@ -90,13 +110,16 @@ fn main() -> Result<()> {
                     hash = hash.wrapping_add(packet.data[37]);
                     println!("data len: {:?}, hash: {}", packet.data.len(), hash);
 
-                    if let Ok(ctx) = L4Context::new(&packet.data, 1) {
-                        connTracker.process(&packet.data, ctx);
-                    }
+                    // 发送 packet
+                    tx.send(packet.data).unwrap();
+
+                    // if let Ok(ctx) = L4Context::new(&packet.data, 1) {
+                    //     connTracker.process(&packet.data, ctx);
+                    // }
 
                 }
 
-                //     let packet = protocolparse::parse( &packet.data);
+                //     let packet = protocols::parse( &packet.data);
                 //     // 需要简化这块的操作, 不然长了
                 //     match packet {
                 //         // 这里面直接对 不同元素命名，后面可以直接使用

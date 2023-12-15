@@ -33,4 +33,13 @@ impl TCP {
             }
         }
     }
+
+    pub fn len(&self) -> usize {
+        match self {
+            TCP::TLS(tls_data) => tls_data.len(), // 假设 tls::TLS 有一个 size 方法
+            TCP::Text(text) => text.len(),
+            TCP::Binary(data) => data.len(),
+            TCP::Empty => 0,
+        }
+    }
 }

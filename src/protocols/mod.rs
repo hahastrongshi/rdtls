@@ -10,6 +10,9 @@ use crate::structs::prelude::*;
 pub mod tcp;
 pub mod tls;
 
+pub mod stream;
+
+pub mod packet;
 
 #[inline]
 pub fn parse(data: &[u8]) -> raw::Raw {

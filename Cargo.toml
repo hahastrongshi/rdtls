@@ -12,9 +12,15 @@ libc = "0.2"
 anyhow = "1"
 log = "0.4"
 pktparse = { version = "0.7.1", features = ["serde"] }
-tls-parser = "0.11"
+tls-parser = { git = "https://github.com/thegwan/tls-parser.git" }
 serde = "1.0"
 serde_json = "1.0"
 serde_derive = "1.0"
 base64 = "0.13"
 hashlink = "0.8.4"
+pnet = "0.33.0"
+thiserror = "1.0"
+strum_macros = "0.20"
+itertools = "0.10.5"
+hex = { version = "0.4.3", features = ["serde"] }
+md5 = "0.7.0"

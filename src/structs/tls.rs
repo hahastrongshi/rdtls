@@ -7,6 +7,12 @@ pub enum TLS {
     ServerHello(ServerHello),
 }
 
+impl TLS {
+    pub fn len(&self) -> usize {
+        0
+    }
+}
+
 fn tls_version(ver: TlsVersion) -> Option<&'static str> {
     match ver {
         TlsVersion::Ssl30 => Some("ssl3.0"),
