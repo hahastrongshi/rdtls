@@ -41,6 +41,20 @@ pub fn open(dev: &str, config: &Config) -> Result<Cap> {
     })
 }
 
+pub fn open_file(path: &str) -> Result<Cap> {
+    let mut errbuf = [0; pcap_sys::PCAP_ERRBUF_SIZE as usize];
+    let path = CString::new(path).unwrap();
+    let handle = unsafe { pcap_sys::pcap_open_offline(path.as_ptr(), errbuf.as_mut_ptr()) };
+
+    if handle.is_null() {
+        let err = unsafe { CStr::from_ptr(errbuf.as_ptr()) };
+        println!("Failed to open file: {}", err.to_str()?);
+    }
+
+    Ok(Cap {
+        handle,
+    })
+}
 
 impl Cap {
     pub fn datalink(&self) -> i32 {

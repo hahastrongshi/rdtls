@@ -14,6 +14,7 @@ use std::sync::mpsc;
 use std::thread;
 use std::sync::{Arc, Mutex};
 use anyhow::{ Result};
+use libc::{int16_t, uint16_t};
 use crate::structs::raw::Raw;
 use crate::structs::ether::Ether;
 use crate::structs::ipv4::IPv4;
@@ -24,12 +25,20 @@ use crate::memory::mbuf::Mbuf;
 
 
 fn main() -> Result<()> {
-   let device = "en0";
+    let device = "en0";
+    let read = true;
+    let path = "aes128gcmsha256.pcap";
 
-    let cap = pcap::open(&device, &pcap::Config {
-        promisc: false,
-        immediate_mode: true,
-    })?;
+    let cap = if read {
+        let cap = pcap::open_file(&path)?;
+        cap
+    } else {
+        let cap = pcap::open(&device, &pcap::Config {
+            promisc: false,
+            immediate_mode: true,
+        })?;
+        cap
+    };
 
     // conntrack
     let connTrackConfig = conntrack::TrackerConfig{
@@ -49,21 +58,22 @@ fn main() -> Result<()> {
 
 
     // 为每个工作线程创建一个通道
-    let (tx, rx) = mpsc::channel::<Vec<u8>>();
-    // 创建工作线程
-    thread::spawn(move || {
-        // 在这里处理接收到的消息
-        for message in rx {
-            println!("Worker  received: {}",  message.len());
-            let mbuf = Mbuf::new(message);
+    // let (tx, rx) = mpsc::channel::<Vec<u8>>();
+    // // 创建工作线程
+    // thread::spawn(move || {
+    //     // 在这里处理接收到的消息
+    //     for message in rx {
+    //         println!("Worker  received: {}",  message.len());
+    //         let mbuf = Mbuf::new(message);
+    //
+    //         if let Ok(ctx) = L4Context::new(&mbuf, 1) {
+    //             //println!("tcp infp: {:?}", ctx);
+    //             connTracker.process(mbuf, ctx);
+    //         }
+    //     }
+    // });
 
-            if let Ok(ctx) = L4Context::new(&mbuf, 1) {
-                connTracker.process(&mbuf, ctx);
-            }
-        }
-    });
-
-    let threads: usize = 1;
+    // let threads: usize = 1;
 
     let cap = Arc::new(Mutex::new(cap));
 
@@ -96,7 +106,14 @@ fn main() -> Result<()> {
                     let tcp = packet.data[23];
                     // 非 tcp 协议直接返回
                     if tcp != 6 {
-                        continue
+                        continue;
+                    }
+
+                    // 判断的是否为 tls 流量
+                    let src_port = (packet.data[34] as uint16_t * 256).wrapping_add(packet.data[35] as uint16_t);
+                    let dst_port = (packet.data[36] as uint16_t * 256).wrapping_add(packet.data[37] as uint16_t);
+                    if src_port != 443 && dst_port != 443 {
+                        continue;
                     }
 
                     // 最低两位
@@ -108,15 +125,22 @@ fn main() -> Result<()> {
                     hash = hash.wrapping_add(packet.data[35]);
                     hash = hash.wrapping_add(packet.data[36]);
                     hash = hash.wrapping_add(packet.data[37]);
-                    println!("data len: {:?}, hash: {}", packet.data.len(), hash);
+                    // println!("data len: {:?}, hash: {}", packet.data.len(), hash);
+                    // todo 从这里把数据的 开始位置记录下来？？
 
                     // 发送 packet
-                    tx.send(packet.data).unwrap();
+                    // tx.send(packet.data).unwrap();
 
-                    // if let Ok(ctx) = L4Context::new(&packet.data, 1) {
-                    //     connTracker.process(&packet.data, ctx);
-                    // }
+                    let mbuf = Mbuf::new(packet.data);
+                    if let Ok(ctx) = L4Context::new(&mbuf, 1) {
+                        //println!("tcp infp: {:?}", ctx);
+                        connTracker.process(mbuf, ctx);
+                    }
 
+                } else {
+                    println!("End of packet stream, shutting down reader thread");
+                    // 添加一个 sleep 30 s
+                    thread::sleep(std::time::Duration::from_secs(30));
                 }
 
                 //     let packet = protocols::parse( &packet.data);

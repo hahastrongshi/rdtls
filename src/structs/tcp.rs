@@ -4,7 +4,7 @@ use serde::Serialize;
 
 #[derive(Debug, PartialEq, Serialize)]
 pub enum TCP {
-    TLS(tls::TLS),
+    //TLS(tls::TLS),
 
     Text(String),
     Binary(Vec<u8>),
@@ -35,11 +35,15 @@ impl TCP {
     }
 
     pub fn len(&self) -> usize {
+        // 打印出  self 的类型
+        println!("{:?}", self);
         match self {
-            TCP::TLS(tls_data) => tls_data.len(), // 假设 tls::TLS 有一个 size 方法
+            //TCP::TLS(tls_data) => tls_data.len(), // 假设 tls::TLS 有一个 size 方法
             TCP::Text(text) => text.len(),
             TCP::Binary(data) => data.len(),
             TCP::Empty => 0,
+            // 获取 self 的字节长度
+
         }
     }
 }

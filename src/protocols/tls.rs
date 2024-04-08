@@ -1,7 +1,7 @@
 use crate::structs::tls;
 use crate::errors::ProtocolParseError;
 
-use crate::structs::tls::{TLS, ClientHello, ServerHello};
+use crate::structs::tls::{TLS, ClientHello, ServerHello, ClientKeyExchange};
 use std::str;
 use tls_parser::{TlsMessage, TlsMessageHandshake, TlsExtension, parse_tls_extension};
 
@@ -30,6 +30,10 @@ pub fn extract(remaining: &[u8]) -> Result<tls::TLS, ProtocolParseError> {
                 TlsMessage::Handshake(TlsMessageHandshake::ServerHello(sh)) => {
                     return Ok(TLS::ServerHello(ServerHello::new(&sh)));
                 },
+                TlsMessage::Handshake(TlsMessageHandshake::ClientKeyExchange(cke)) => {
+                    println!("client key exchange, len: {}", cke.parameters.len());
+                    return Ok(TLS::ClientKeyExchange(ClientKeyExchange::new(&cke)))
+                }
                 _ => (),
             }
         }

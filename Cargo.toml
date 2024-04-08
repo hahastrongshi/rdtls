@@ -20,7 +20,12 @@ base64 = "0.13"
 hashlink = "0.8.4"
 pnet = "0.33.0"
 thiserror = "1.0"
-strum_macros = "0.20"
+strum = "0.21.0" # 使用最新版本
+strum_macros = "0.21"
 itertools = "0.10.5"
 hex = { version = "0.4.3", features = ["serde"] }
 md5 = "0.7.0"
+crossbeam-channel = "0.5.8"
+openssl = "0.10.64"
+ring = "0.17.8"
+tls-decrypt = {git = "https://github.com/hahastrongshi/tls-decrypt.git"}

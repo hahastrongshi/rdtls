@@ -42,6 +42,7 @@ impl FiveTuple {
 
     pub fn post_match(&self, pdu: L4Pdu) {
         // todo
+        println!("consume: orig: {}  -> resp: {}  length: {}", self.orig, self.resp, pdu.length());
     }
 }
 

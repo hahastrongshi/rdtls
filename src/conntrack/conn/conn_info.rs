@@ -3,6 +3,13 @@ use crate::conntrack::pdu::L4Pdu;
 use crate::protocols::stream::{
     ConnData, ParseResult, Session,
 };
+use crate::conntrack::conn::trackedconnection::TrackedConnection;
+
+#[derive(Debug)]
+pub struct TlsInfo {
+    pub client_cipher: Option<Box<dyn tls_decrypt::decrypt::Decryptor>>,
+    pub server_cipher: Option<Box<dyn tls_decrypt::decrypt::Decryptor>>,
+}
 
 #[derive(Debug)]
 pub(crate) struct ConnInfo {
@@ -11,7 +18,10 @@ pub(crate) struct ConnInfo {
     /// Connection data (for filtering)
     pub(crate) cdata: ConnData,
     /// Subscription data (for delivering)
-    pub(crate) sdata: FiveTuple,
+    /// 更换为 trackedConnection
+    pub(crate) sdata: TrackedConnection,
+
+    pub tls_info: TlsInfo,
 }
 
 impl ConnInfo
@@ -20,7 +30,11 @@ impl ConnInfo
         ConnInfo {
             state: ConnState::Probing,
             cdata: ConnData::new(five_tuple, pkt_term_node),
-            sdata: five_tuple,
+            sdata: TrackedConnection::new(five_tuple),
+            tls_info: TlsInfo{
+                client_cipher: None,
+                server_cipher: None,
+            },
         }
     }
 
@@ -29,19 +43,20 @@ impl ConnInfo
         pdu: L4Pdu,
     ) {
         match self.state {
-            _ => todo!(),
-            // ConnState::Probing => {
-            //     self.on_probe(pdu, subscription, registry);
-            // }
-            // ConnState::Parsing => {
-            //     self.on_parse(pdu, subscription);
-            // }
-            // ConnState::Tracking => {
-            //     self.on_track(pdu, subscription);
-            // }
-            // ConnState::Remove => {
-            //     drop(pdu);
-            // }
+            ConnState::Probing => {
+                self.on_probe(pdu);
+            }
+            ConnState::Parsing => {
+                // 这里是真正消费数据的地方
+                self.on_parse(pdu);
+            }
+            ConnState::Tracking => {
+                self.on_track(pdu);
+            }
+            ConnState::Remove => {
+                drop(pdu);
+            }
+            _ => {}
         }
     }
 
@@ -49,43 +64,20 @@ impl ConnInfo
         &mut self,
         pdu: L4Pdu,
     ) {
-        // match registry.probe_all(&pdu) {
-        //     ProbeRegistryResult::Some(conn_parser) => {
-        //         self.cdata.conn_parser = conn_parser;
-        //         match subscription.filter_conn(&self.cdata) {
-        //             FilterResult::MatchTerminal(idx) | FilterResult::MatchNonTerminal(idx) => {
-        //                 self.state = ConnState::Parsing;
-        //                 self.cdata.conn_term_node = idx;
-        //                 self.on_parse(pdu, subscription);
-        //             }
-        //             FilterResult::NoMatch => {
-        //                 self.state = ConnState::Remove;
-        //             }
-        //         }
-        //     }
-        //     ProbeRegistryResult::None => {
-        //         // conn_parser remains Unknown
-        //         self.sdata.pre_match(pdu, None);
-        //         match subscription.filter_conn(&self.cdata) {
-        //             FilterResult::MatchTerminal(_idx) => {
-        //                 self.sdata.on_match(Session::default(), subscription);
-        //                 self.state = self.get_match_state(0);
-        //             }
-        //             FilterResult::MatchNonTerminal(_idx) => {
-        //                 self.state = ConnState::Remove;
-        //             }
-        //             FilterResult::NoMatch => {
-        //                 self.state = ConnState::Remove;
-        //             }
-        //         }
-        //     }
-        //     ProbeRegistryResult::Unsure => {
-        //         self.sdata.pre_match(pdu, None);
-        //     }
-        // }
+
+                // conn_parser remains Unknown
+                self.cdata.process_packet(pdu, &mut self.tls_info);
+
+                // todo 查看实现
+                //self.sdata.on_match();
+                // self.state = self.get_match_state(0);
+                self.state = ConnState::Parsing;
+
+
     }
 
     fn on_parse(&mut self, pdu: L4Pdu) {
+        self.cdata.process_packet(pdu, &mut self.tls_info);
         // match self.cdata.conn_parser.parse(&pdu) {
         //     ParseResult::Done(id) => {
         //         self.sdata.pre_match(pdu, Some(id));
@@ -111,7 +103,8 @@ impl ConnInfo
     }
 
     fn on_track(&mut self, pdu: L4Pdu) {
-        // self.sdata.post_match(pdu, subscription);
+        // todo 这里需要传入 connInfo
+        self.cdata.process_packet(pdu, &mut self.tls_info);
     }
 
     fn get_match_state(&self, session_id: usize) -> ConnState {

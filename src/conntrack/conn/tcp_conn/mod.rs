@@ -5,12 +5,12 @@ use crate::conntrack::conn::conn_info::ConnInfo;
 use crate::conntrack::pdu::{L4Context, L4Pdu};
 use crate::protocols::packet::tcp::{FIN, RST};
 
-pub(crate) struct TcpConn<'a> {
-    pub(crate) ctos: TcpFlow<'a>,
-    pub(crate) stoc: TcpFlow<'a>,
+pub(crate) struct TcpConn {
+    pub(crate) ctos: TcpFlow,
+    pub(crate) stoc: TcpFlow,
 }
 
-impl TcpConn<'_> {
+impl TcpConn {
     pub(crate) fn new_on_syn(ctxt: L4Context, max_ooo: usize) -> Self {
         let flags = ctxt.flags;
         let next_seq = ctxt.seq_no.wrapping_add(1 + ctxt.length as u32);

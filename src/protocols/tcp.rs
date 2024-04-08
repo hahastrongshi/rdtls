@@ -24,10 +24,11 @@ pub fn parse(remaining: &[u8]) -> Result<(tcp::TcpHeader, TCP), ProtocolParseErr
 pub fn extract(_tcp_hdr: &TcpHeader, remaining: &[u8]) -> Result<TCP, ProtocolParseError> {
     if remaining.is_empty() {
         Ok(TCP::Empty)
-    } else if let Ok(client_hello) = tls::extract(remaining) {
-        Ok(TCP::TLS(client_hello))
-    } else if let Ok(server_hello) = tls::extract(remaining) {
-        Ok(TCP::TLS(server_hello))
+    // }
+    // else if let Ok(client_hello) = tls::extract(remaining) {
+    //     Ok(TCP::TLS(client_hello))
+    // } else if let Ok(server_hello) = tls::extract(remaining) {
+    //     Ok(TCP::TLS(server_hello))
     } else {
         Err(ProtocolParseError::UnknownProtocol)
     }

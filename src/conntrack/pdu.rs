@@ -14,24 +14,20 @@ use crate::structs::ipv4::IPv4;
 
 /// Transport-layer protocol data unit for stream reassembly and application-layer protocol parsing.
 #[derive(Debug)]
-pub struct L4Pdu<'a> {
+pub struct L4Pdu {
     /// Internal packet buffer containing frame data.
-    pub(crate) mbuf: &'a Mbuf,
+    pub(crate) mbuf:  Mbuf,
     /// Transport layer context.
     pub(crate) ctxt: L4Context,
     /// `true` if segment is in the direction of orig -> resp.
     pub(crate) dir: bool,
 }
 
-impl<'a> L4Pdu<'a> {
-    pub(crate) fn new(mbuf: &'a Mbuf, ctxt: L4Context, dir: bool) -> Self {
+impl L4Pdu {
+    pub(crate) fn new(mbuf: Mbuf, ctxt: L4Context, dir: bool) -> Self {
         L4Pdu { mbuf, ctxt, dir }
     }
 
-    #[inline]
-    pub(crate) fn mbuf_own(self) -> &'a Mbuf {
-        self.mbuf
-    }
 
     #[inline]
     pub(crate) fn mbuf_ref(&self) -> &Mbuf {
@@ -88,25 +84,25 @@ impl L4Context {
             // 需要简化这块的操作, 不然长了
             match packet {
                 // 这里面直接对 不同元素命名，后面可以直接使用
-                Raw::Ether(_, ether) => {
-                    println!("{:?}", ether);
+                Raw::Ether(etherHeader, ether) => {
+                    //println!("header len: {:?}, {:?}", etherHeader, ether);
                     match ether {
                         Ether::IPv4(header, tcp) => {
                             match tcp {
                                 IPv4::TCP(tcpHeader, payload) => {
-                                    println!("protocol: {:?},  {:?}:{:?} -> {:?}:{:?}, payload: {:?}",
+                                    println!("protocol: {:?},  {:?}:{:?} -> {:?}:{:?}",
                                              header.protocol, header.source_addr, tcpHeader.source_port,
-                                             header.dest_addr, tcpHeader.dest_port, payload);
+                                             header.dest_addr, tcpHeader.dest_port);
 
                                     Ok(L4Context {
                                         src: SocketAddr::new(IpAddr::V4(header.source_addr), tcpHeader.source_port),
                                         dst: SocketAddr::new(IpAddr::V4(header.dest_addr), tcpHeader.dest_port),
                                         proto: 1,
                                         idx,
-                                        offset: tcpHeader.data_offset as usize,
+                                        offset: mbuf.data_len() - payload.len(), // todo 这个 offset 后面会用到
                                         length: payload.len(),
                                         seq_no: tcpHeader.sequence_no,
-                                        flags: 0b0000_0010,
+                                        flags: 0b0000_0010, // todo 这里需要修改
                                         rst: tcpHeader.flag_rst,
                                     })
                                     // bail!("Malformed Packet")

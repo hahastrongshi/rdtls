@@ -9,13 +9,13 @@ pub mod conn_id;
 pub(crate) mod pdu;
 
 use crate::Mbuf;
-// mod timerwheel;
+mod timerwheel;
 
-// use self::conn::conn_info::ConnState;
+use self::conn::conn_info::ConnState;
 use self::conn::{Conn, L4Conn};
 use self::conn_id::ConnId;
 use self::pdu::{L4Context, L4Pdu};
-// use self::timerwheel::TimerWheel;
+use self::timerwheel::TimerWheel;
 // use crate::config::ConnTrackConfig;
 // use crate::memory::mbuf::Mbuf;
 // use crate::protocols::packet::tcp::TCP_PROTOCOL;
@@ -39,25 +39,25 @@ pub struct ConnTracker {
     config: TrackerConfig,
 
     /// Manages `ConnId` to `Conn<T>` mappings.
-    // table: LinkedHashMap<ConnId, Conn>,
-    table: LinkedHashMap<u64, u64>,
+    table: LinkedHashMap<ConnId, Conn>,
+    //table: LinkedHashMap<u64, u64>,
 
-    // timerwheel: TimerWheel,
+    timerwheel: TimerWheel,
 }
 
 impl ConnTracker {
     /// Creates a new `ConnTracker`.
     pub(crate) fn new(config: TrackerConfig) -> Self {
         let table = LinkedHashMap::with_capacity(config.max_connections);
-        // let timerwheel = TimerWheel::new(
-        //     cmp::max(config.tcp_inactivity_timeout, config.udp_inactivity_timeout),
-        //     config.timeout_resolution,
-        // );
+        let timerwheel = TimerWheel::new(
+            cmp::max(config.tcp_inactivity_timeout, config.udp_inactivity_timeout),
+            config.timeout_resolution,
+        );
         ConnTracker {
             config,
             // registry,
             table,
-            // timerwheel,
+            timerwheel,
         }
     }
 
@@ -70,34 +70,32 @@ impl ConnTracker {
     /// Process a single incoming packet `mbuf` with layer-4 context `ctxt`.
     pub(crate) fn process(
         &mut self,
-        mbuf: &Mbuf,
+        mbuf: Mbuf,
         ctxt: L4Context,
     ) {
-        // let conn_id = ConnId::new(ctxt.src, ctxt.dst, ctxt.proto);
-        let conn_id: u64 = 1;
+        let conn_id = ConnId::new(ctxt.src, ctxt.dst, ctxt.proto);
         match self.table.raw_entry_mut().from_key(&conn_id) {
             RawEntryMut::Occupied(mut occupied) => {
-                // let conn = occupied.get_mut();
-                // let dir = conn.packet_dir(&ctxt);
-                // conn.last_seen_ts = Instant::now();
-                // conn.inactivity_window = match &conn.l4conn {
-                //     L4Conn::Tcp(_) => self.config.tcp_inactivity_timeout,
-                //     L4Conn::Udp(_) => self.config.udp_inactivity_timeout,
-                // };
-                // if conn.state() == ConnState::Remove {
-                //     log::error!("Conn in Remove state when occupied in table");
-                // }
-                // let pdu = L4Pdu::new(mbuf, ctxt, dir);
-                // // conn.update(pdu, subscription, &self.registry);
-                // if conn.state() == ConnState::Remove {
-                //     occupied.remove();
-                //     return;
-                // }
-                //
-                // if conn.terminated() {
-                //     conn.terminate(subscription);
-                //     occupied.remove();
-                // }
+                let conn = occupied.get_mut();
+                let dir = conn.packet_dir(&ctxt);
+                conn.last_seen_ts = Instant::now();
+                conn.inactivity_window = match &conn.l4conn {
+                    L4Conn::Tcp(_) => self.config.tcp_inactivity_timeout,
+                };
+                if conn.state() == ConnState::Remove {
+                    log::error!("Conn in Remove state when occupied in table");
+                }
+                let pdu = L4Pdu::new(mbuf, ctxt, dir);
+                conn.update(pdu);
+                if conn.state() == ConnState::Remove {
+                    occupied.remove();
+                    return;
+                }
+
+                if conn.terminated() {
+                    conn.terminate();
+                    occupied.remove();
+                }
             }
             RawEntryMut::Vacant(_) => {
                 if self.size() < self.config.max_connections {
@@ -107,21 +105,20 @@ impl ConnTracker {
                             self.config.tcp_establish_timeout,
                             self.config.max_out_of_order,
                         ),
-                        // UDP_PROTOCOL => Conn::new_udp(ctxt, self.config.udp_inactivity_timeout),
-                        // 1 => Ok(1),
                         _ => Err(anyhow!("Invalid L4 Protocol")),
                     };
                     if let Ok(mut conn) = conn {
                         let pdu = L4Pdu::new(mbuf, ctxt, true);
-                        // conn.info.consume_pdu(pdu, subscription, &self.registry);
-                        // if conn.state() != ConnState::Remove {
-                        //     self.timerwheel.insert(
-                        //         &conn_id,
-                        //         conn.last_seen_ts,
-                        //         conn.inactivity_window,
-                        //     );
-                        //     self.table.insert(conn_id, conn);
-                        // }
+                        // 在这里消耗掉产生的 tls 数据
+                        conn.info.consume_pdu(pdu);
+                        if conn.state() != ConnState::Remove {
+                            self.timerwheel.insert(
+                                &conn_id,
+                                conn.last_seen_ts,
+                                conn.inactivity_window,
+                            );
+                            self.table.insert(conn_id, conn);
+                        }
                     }
                 } else {
                     log::error!("Table full. Dropping packet.");

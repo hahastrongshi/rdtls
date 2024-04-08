@@ -1,10 +1,11 @@
 use serde::Serialize;
-use tls_parser::{TlsVersion, TlsClientHelloContents, TlsServerHelloContents};
+use tls_parser::{TlsVersion, TlsClientHelloContents, TlsServerHelloContents, TlsClientKeyExchangeContents};
 
 #[derive(Debug, PartialEq, Serialize)]
 pub enum TLS {
     ClientHello(ClientHello),
     ServerHello(ServerHello),
+    ClientKeyExchange(ClientKeyExchange),
 }
 
 impl TLS {
@@ -60,6 +61,22 @@ impl ServerHello {
             version: tls_version(sh.version),
             session_id,
             cipher,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Serialize)]
+pub struct ClientKeyExchange {
+    //pub version: Option<&'static str>,
+    pub premaster_secret: Option<Vec<u8>>,
+}
+
+impl ClientKeyExchange {
+    pub fn new(cke: &TlsClientKeyExchangeContents) -> ClientKeyExchange {
+        let client_key_exchange = cke.parameters.to_vec();
+
+        ClientKeyExchange {
+            premaster_secret: Option::from(client_key_exchange),
         }
     }
 }

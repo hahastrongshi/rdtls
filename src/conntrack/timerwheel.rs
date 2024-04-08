@@ -54,14 +54,13 @@ impl TimerWheel {
 
     /// Checks for and remove inactive connections.
     #[inline]
-    pub(super) fn check_inactive<T: Trackable>(
+    pub(super) fn check_inactive(
         &mut self,
-        table: &mut LinkedHashMap<ConnId, Conn<T>>,
-        subscription: &Subscription<T::Subscribed>,
+        table: &mut LinkedHashMap<ConnId, Conn>,
     ) {
         let table_len = table.len();
         if let Ok(now) = self.ticker.try_recv() {
-            let nb_removed = self.remove_inactive(now, table, subscription);
+            let nb_removed = self.remove_inactive(now, table);
             log::debug!(
                 "expired: {} ({})",
                 nb_removed,
@@ -76,11 +75,10 @@ impl TimerWheel {
     ///
     /// Returns the number of connections removed.
     #[inline]
-    pub(super) fn remove_inactive<T: Trackable>(
+    pub(super) fn remove_inactive(
         &mut self,
         now: Instant,
-        table: &mut LinkedHashMap<ConnId, Conn<T>>,
-        subscription: &Subscription<T::Subscribed>,
+        table: &mut LinkedHashMap<ConnId, Conn>,
     ) -> usize {
         let period = self.period;
         let nb_buckets = self.timers.len();
@@ -114,7 +112,7 @@ impl TimerWheel {
                     let expire_time = last_seen_time + conn.inactivity_window;
                     if expire_time < check_time {
                         cnt_exp += 1;
-                        conn.terminate(subscription);
+                        conn.terminate();
                         occupied.remove();
                     } else {
                         let timer_index = (expire_time / period) % nb_buckets;

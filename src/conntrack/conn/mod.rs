@@ -5,6 +5,7 @@
 
 pub(crate) mod conn_info;
 pub(crate) mod tcp_conn;
+pub(crate) mod trackedconnection;
 
 use self::conn_info::{ConnInfo, ConnState};
 use self::tcp_conn::TcpConn;
@@ -19,23 +20,23 @@ use std::time::Instant;
 /// Tracks either a TCP or a UDP connection.
 ///
 /// Performs light-weight stream reassembly for TCP connections and tracks UDP connections.
-pub(crate) enum L4Conn<'a> {
-    Tcp(TcpConn<'a>),
+pub(crate) enum L4Conn {
+    Tcp(TcpConn),
 }
 
 /// Connection state.
-pub(crate) struct Conn<'a> {
+pub(crate) struct Conn {
     /// Timestamp of the last observed packet in the connection.
     pub(crate) last_seen_ts: Instant,
     /// Amount of time (in milliseconds) before the connection should be expired for inactivity.
     pub(crate) inactivity_window: usize,
     /// Layer-4 connection tracking.
-    pub(crate) l4conn: L4Conn<'a>,
+    pub(crate) l4conn: L4Conn,
     /// Connection information for filtering and parsing.
     pub(crate) info: ConnInfo,
 }
 
-impl Conn<'_> {
+impl Conn {
     /// Creates a new TCP connection from `ctxt` with an initial inactivity window of
     /// `initial_timeout` and a maximum out-or-order tolerance of `max_ooo`. This means that there
     /// can be at most `max_ooo` packets buffered out of sequence before Retina chooses to discard
@@ -71,6 +72,7 @@ impl Conn<'_> {
                         tcp_conn.stoc.ooo_buf.buf.clear();
                     }
                     tcp_conn.update_term_condition(pdu.flags(), pdu.dir);
+                    // todo 这里可能有问题
                     self.info.sdata.post_match(pdu);
                 } else {
                     tcp_conn.reassemble(pdu, &mut self.info);

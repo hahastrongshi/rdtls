@@ -7,17 +7,17 @@ use std::collections::VecDeque;
 
 /// Represents a uni-directional TCP flow
 #[derive(Debug)]
-pub(crate) struct TcpFlow<'a> {
+pub(crate) struct TcpFlow {
     /// Expected sequence number of next segment
     pub(super) next_seq: Option<u32>,
     /// Flow status for consumed control packets.
     /// Matches TCP flag bits.
     pub(super) consumed_flags: u8,
     /// Out-of-order buffer
-    pub(crate) ooo_buf: OutOfOrderBuffer<'a>,
+    pub(crate) ooo_buf: OutOfOrderBuffer,
 }
 
-impl TcpFlow<'_> {
+impl TcpFlow {
     /// Creates a default TCP flow
     #[inline]
     pub(super) fn default(capacity: usize) -> Self {
@@ -53,9 +53,11 @@ impl TcpFlow<'_> {
 
         if let Some(next_seq) = self.next_seq {
             if next_seq == cur_seq {
+                // normal behavior
                 // Segment is the next expected segment in the sequence
                 self.consumed_flags |= segment.flags();
                 if segment.flags() & RST != 0 {
+                    // todo 这里需要处理一下这个连接最终的数据
                     info.consume_pdu(segment);
                     return;
                 }
@@ -66,6 +68,7 @@ impl TcpFlow<'_> {
                 info.consume_pdu(segment);
                 self.flush_ooo_buffer(expected_seq, info);
             } else if wrapping_lt(next_seq, cur_seq) {
+                // miss some medium packet
                 // Segment comes after the next expected segment
                 self.buffer_ooo_seg(segment, info);
             } else if let Some(expected_seq) = overlap(&mut segment, next_seq) {
@@ -129,12 +132,12 @@ impl TcpFlow<'_> {
 
 /// A buffer to hold reordered TCP segments
 #[derive(Debug)]
-pub(crate) struct OutOfOrderBuffer<'a> {
+pub(crate) struct OutOfOrderBuffer {
     capacity: usize,
-    pub(crate) buf: VecDeque<L4Pdu<'a>>,
+    pub(crate) buf: VecDeque<L4Pdu>,
 }
 
-impl OutOfOrderBuffer<'_> {
+impl OutOfOrderBuffer {
     /// Creates a new OutOfOrderBuffer with capacity
     fn new(capacity: usize) -> Self {
         OutOfOrderBuffer {
@@ -149,14 +152,15 @@ impl OutOfOrderBuffer<'_> {
     }
 
     /// Inserts segment at the end of the buffer.
-    fn insert_back(&mut self, segment: L4Pdu) -> Result<()> {
+    fn insert_back(&mut self, segment: L4Pdu) -> Result<()>
+    {
         log::debug!("insert with seq : {:#?}", segment.seq_no());
         if self.len() >= self.capacity {
             // // must clear to drop buffered Mbufs
-            // self.buf.clear();
+            self.buf.clear();
             bail!("Out-of-order buffer overflow.");
         }
-        // self.buf.push_back(segment);
+        self.buf.push_back(segment);
         Ok(())
     }
 
@@ -185,6 +189,7 @@ impl OutOfOrderBuffer<'_> {
                 let segment = self.buf.remove(index).unwrap();
                 *consumed_flags |= segment.flags();
                 if segment.flags() & RST != 0 {
+                    // 这里需要消费接收的 packet
                     info.consume_pdu(segment);
                     return next_seq;
                 }
@@ -192,6 +197,8 @@ impl OutOfOrderBuffer<'_> {
                 if segment.flags() & FIN != 0 {
                     next_seq = next_seq.wrapping_add(1);
                 }
+
+                // 这里需要消费接收的 packet
                 info.consume_pdu(segment);
                 index = 0;
             } else if wrapping_lt(next_seq, cur_seq) {
@@ -201,6 +208,8 @@ impl OutOfOrderBuffer<'_> {
                 if let Some(update_seq) = overlap(&mut segment, next_seq) {
                     next_seq = update_seq;
                     *consumed_flags |= segment.flags();
+
+                    // 这里需要消费接收的 packet
                     info.consume_pdu(segment);
                     index = 0;
                 } else {
